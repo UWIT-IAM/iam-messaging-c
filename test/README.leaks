@@ -1,0 +1,13 @@
+Good leaktest
+
+
+$ valgrind -v --tool=memcheck --leak-check=full  ./test_msg -n 1000
+$ valgrind -v --tool=memcheck --leak-check=full  ./test_crypt -n 1000
+
+Look for anything lost outside of the init functions.
+
+My ubuntu valgrind reports a lot of uninitialized errors which I think are wrongly reported.
+
+
+
+ 

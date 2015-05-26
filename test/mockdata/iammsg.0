@@ -1,0 +1,18 @@
+{
+        "header":       {
+                "version":      "UWIT-1",
+                "contentType":  "json",
+                "messageContext":       "c29tZS1tZXNzYWdlLWNvbnRleHQ=",
+                "messageType":  "uw-test-message",
+                "messageId":    "66e0ee39-c864-7993-8fb2-68b0e9b650df",
+                "sender":       "iamtest-c",
+                "timestamp":    "2015-05-26T21:03:10.153Z",
+                "signature":    "D5v1kEvQs3RqiuJybtx7XwfY07k2K1E/iARCEoAPhJGABlNi4IUmnEbD2e2JU+uTzo2KuK0eVxI/pxJYYyRFjoXWTArU1Yhb0OKBU2gQQ3wFUGW47Ydv3i9nWTPZ8LskgaZWzqtK3njIgO1kLcsbNbWKMMiGCPXVo3Md+BkB8Ok=",
+                "signingCertUrl":       "file:/home/fox/src/iam-messaging-c/demo/z.crt",
+                "keyId":        "testcrypt1",
+                "iv":   "WcK8ajndaz0HHY640LVtvg=="
+        },
+        "body": "UqH0XtY78JtMRtDkymCqsqBumtZWPCHRk/VLMCmA7MU="
+}
+
+

@@ -1,0 +1,38 @@
+This is the c version of the IAM AWS messaging library.
+
+The cJSON package is from Dave Gamble.  See the README.CJSON
+
+
+For usage examples see the demos:  demo_send, demo_recv, demo_recv.cgi, demo_gws_recv.c
+
+The configuration file is described in ../doc/readme.gws
+
+----------------------------------------------------------------
+
+To receive messages from an SQS queue:
+
+  // init the library
+
+  iam_msgInit("config-file-name")
+
+
+  // receive a message
+
+  IamMessage *msg = iam_msgRecv();
+  
+  on error, msg->error!=0 and msg->message contains the error text.
+
+  // msg is a generic message. 
+  // For GWS messages you may want to parse the context.
+ 
+  cJSON *ctx = cJSON_Parse(msg->messageContext);
+
+  // see the demo_gws_recv.c
+
+----------------------------------------------------------------
+
+
+
+
+
+
