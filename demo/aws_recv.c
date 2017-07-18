@@ -15,7 +15,7 @@
  * ========================================================================
  */
 
-/* Recv UW message from aws */
+/* Recv UW message from aws sqs queue */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -73,9 +73,7 @@ int main(int argc, char **argv) {
   int nm = sqs_getNumMessages(ctx);
   fprintf(stderr, "%d messages\n", nm);
   
-  nm = sqs_getNumMessages(ctx);
-  fprintf(stderr, "%d messages\n", nm);
-
+  
   int n;
   for (n=0;n<ntest;n++) {
      IamMessage *msg = iam_msgRecv(ctx);

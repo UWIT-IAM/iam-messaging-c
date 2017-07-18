@@ -24,6 +24,7 @@
 #include <time.h>
 #include <math.h>
 #include <pthread.h>
+#include <ctype.h>
 
 #include <openssl/bio.h>
 #include <openssl/err.h>
@@ -145,10 +146,29 @@ char *iam_timestampNow() {
 }
 
 // url encoding.  returns malloc'd string
-char *iam_urlencode (char *txt) {
+char rfc3986[256];
+char *iam_urlencode(char *txt) {
+   char *enc = (char*) malloc(strlen(txt)*3 + 1);
+   unsigned char c;
+   int ci = 0;
+   while ((c=*txt)!=0) {
+      if (rfc3986[c]) {
+         enc[ci++] = c;
+      } else {
+         snprintf(&enc[ci], 4, "%%%02X", c);
+         ci += 3;
+      }
+      txt++;
+   }
+   enc[ci] = 0;
+   return (enc);
+}
+
+
+char *_iam_urlencode (char *txt) {
   int i;
-  char *fixchar = " \n$&+,/:;=?@!";
-  char *hexchar = "0123456789ABCDEF";
+  char *fixchar = " \n$&+,/:;=?@! ";
+  char *hexchar = "0123456789ABCDEF20";
   
   int s = 0;
   for (i=0; txt[i]; i++,s++) if (strchr(fixchar, txt[i])) s += 4;
@@ -321,7 +341,9 @@ static CertPKey *findPubKey(char *id, char *url) {
 
 // external vers of above
 int iam_setPubKey(char *id, char *url) {
-   if (findPubKey(id, url)) return (1);
+   if (findPubKey(id, url)) {
+      return (1);
+   }
    return (0);
 }
 char *iam_getSignUrl(char *id) {
@@ -688,6 +710,9 @@ int iam_crypt_init() {
    crypt_hash = EVP_sha1();
 
    curl_global_init(CURL_GLOBAL_ALL);
+
+   int i;
+   for (i=0;i<256;i++) rfc3986[i] = isalnum(i) || i == '~' || i == '-' || i == '.' || i == '_' ? i : 0;
 
    inited = 1;
    return (1);

@@ -28,7 +28,6 @@
 #include <pthread.h>
 
 #include <curl/curl.h>
-// #include <curl/types.h>
 #include <curl/easy.h>
 
 #include "cJSON.h"
@@ -71,6 +70,17 @@ static SQSMessage *newSQSMessage(char *sqsmsg, char *handle) {
    TRACE(stderr, "incoming message: [%s]\n", sqsmsg);
    TRACE(stderr, "incoming handle: [%s]\n", handle);
 
+   if (*sqsmsg != '{') {
+      SQSMessage *sqs = (SQSMessage*) malloc(sizeof(SQSMessage));
+      memset(sqs, '\0', sizeof(SQSMessage));
+      sqs->type = strdup("Event");
+      sqs->messageId = iam_timestampNow();
+      sqs->message = iam_base64ToText(sqsmsg);
+      sqs->handle = strdup(handle);
+      TRACE(stderr, "message is: %s \n", sqs->message);
+      return (sqs);
+   }
+
    cJSON *sqsroot = cJSON_Parse(sqsmsg);
    if (!sqsroot) {
       syslog(LOG_ERR, "aws_sqs bad json input: %s", sqsmsg);
@@ -82,6 +92,7 @@ static SQSMessage *newSQSMessage(char *sqsmsg, char *handle) {
       cJSON_Delete(sqsroot);
       return (NULL);
    }
+   TRACE(stderr, "message type: %s \n", type);
    
    SQSMessage *sqs = (SQSMessage*) malloc(sizeof(SQSMessage));
    memset(sqs, '\0', sizeof(SQSMessage));
@@ -92,8 +103,8 @@ static SQSMessage *newSQSMessage(char *sqsmsg, char *handle) {
    sqs->topicArn = safeDupString(sqsroot, "TopicArn");
    sqs->handle = strdup(handle);
 
-   if (strcmp(type, "Notification")) {
-      syslog(LOG_INFO, "message (%s) not a notification", type);
+   if (strcmp(type, "Notification") && strcmp(type, "UWEvent")) {
+      syslog(LOG_INFO, "message (%s) not a notification or uw sqs", type);
       if (!strcmp(type, "SubscriptionConfirmation")) {
           syslog(LOG_INFO, "message is the subscription confirmation: %s", sqsmsg);
       }
@@ -231,6 +242,7 @@ SQSMessage *sqs_getMessages(RestContext *ctx, int max_messages) {
    char *e_sig = iam_urlencode(sig);
    snprintf(sigin, bufl, "%s?%s&Signature=%s", sqsUrl, qs, e_sig);
    
+   TRACE(stderr, "sqs recv qs = %s\n", sigin);
    char *txt = iam_getPage(ctx, sigin);
 
    if (!txt) {
@@ -249,7 +261,7 @@ SQSMessage *sqs_getMessages(RestContext *ctx, int max_messages) {
    char *msgp = txt;
    char *msge = txt;
 
-   // printf("txt[%s]\n", txt);
+   TRACE(stderr, "recv = [%s]\n", txt);
    
    while (msge!=NULL  && (msgp=strstr(msge, "<Message>"))) {
       msge = strstr(msgp, "</Message>");
@@ -309,7 +321,6 @@ int sqs_deleteMessage(RestContext *ctx, char *handle) {
    char *sig = iam_computeAWSSignature256(awsKey, sigin);
    char *e_sig = iam_urlencode(sig);
    snprintf(sigin, bufl, "%s?%s&Signature=%s", sqsUrl, qs, e_sig);
-   // printf("url: %s\n", sigin);
    
    char *txt = iam_getPage(ctx, sigin);
    long resp = 0;
@@ -329,6 +340,120 @@ int sqs_deleteMessage(RestContext *ctx, char *handle) {
    if (resp>=300) return (-2);
    return (0);
 
+}
+
+
+
+/* Send a message to sqs:
+   - base64 encode the message
+   - add json wrappers ( similar to what sns adds )
+   - generate signature
+   - send to SQS
+   - returns aws http status
+ */
+
+// simple uuid generator
+#include <uuid/uuid.h>
+char *_uuidgen() {
+   char *ustr = (char*) malloc(40);
+   uuid_t u;
+   uuid_generate(u);
+   uuid_unparse(u, ustr);
+   return (ustr);
+}
+
+// default queue 
+int sqs_sendMessage(RestContext *ctx, char *sub, char *msg, int msgl) {
+   return sqs_sendMessageQueue(ctx, sub, msg, msgl, sqsUrl);
+}
+
+// user specified url and queue
+int sqs_sendMessageQueue(RestContext *ctx, char *sub, char *msg, int msgl, char *queueUrl) {
+
+   char *host = strdup(queueUrl+8);
+   char *s = strchr(host, '/');
+   char *path = strdup(s);
+   *s = '\0';
+   char *e_url = iam_urlencode(queueUrl);
+   TRACE(stderr, "host=%s, path=%s\n", host, path);
+   TRACE(stderr, "encurl=%s\n", e_url);
+
+   char *b64msg = iam_dataToBase64(msg, msgl);
+   char *e_b64msg = iam_urlencode(b64msg);
+   char *timestamp = iam_timestampNow();
+   char *e_timestamp = iam_urlencode(timestamp);
+
+   // wrap
+   cJSON *jdoc = cJSON_CreateObject();
+   cJSON_AddItemToObject(jdoc, "Type", cJSON_CreateString("UWEvent"));
+   char *mid = _uuidgen(); 
+   cJSON_AddItemToObject(jdoc, "MessageId", cJSON_CreateString(mid));
+   free(mid);
+   cJSON_AddItemToObject(jdoc, "Subject", cJSON_CreateString(sub));
+   cJSON_AddItemToObject(jdoc, "Timestamp", cJSON_CreateString(timestamp));
+   cJSON_AddItemToObject(jdoc, "Message", cJSON_CreateString(e_b64msg));
+   char *wrapped = cJSON_PrintUnformatted(jdoc);
+   char *e_wrapped = iam_urlencode(wrapped);
+   cJSON_Delete(jdoc);
+
+   int bufl = strlen(e_wrapped)+1024;
+   TRACE(stderr, "bufl=%d, b64msg=%zu, e_b64msg=%zu, e_timestamp=%zu\n",
+        bufl, strlen(b64msg), strlen(e_b64msg), strlen(e_timestamp) );
+   char *qs = (char*) malloc(bufl);
+   char *qspost = (char*) malloc(bufl);
+   snprintf(qs, bufl,
+      "AWSAccessKeyId=%s&Action=SendMessage&MessageBody=%s&MessageGroupId=control&QueueUrl=%s&SignatureMethod=HmacSHA256&SignatureVersion=2&Timestamp=%s",
+      awsKeyId, e_wrapped, e_url, e_timestamp);
+   // free(wrapped);
+   free(e_wrapped);
+   TRACE(stderr, "qs=%s\n", qs);
+   char *sigin = (char*) malloc(bufl);
+   snprintf(sigin, bufl, "POST\n%s\n/\n%s", host, qs);
+   char *sig = iam_computeAWSSignature256(awsKey, sigin);
+   char *e_sig = iam_urlencode(sig);
+   snprintf(sigin, bufl, "%s&Signature=%s", qs, e_sig);
+
+   // compose the url
+   snprintf(qspost, bufl, "http://%s/", host);
+   TRACE(stderr, "bufl=%d, sigin=%zu, qspost=%zu\n", bufl, strlen(sigin), strlen(qspost));
+   
+   curl_easy_setopt(ctx->curl, CURLOPT_URL, qspost);
+   curl_easy_setopt (ctx->curl, CURLOPT_POSTFIELDS, sigin );
+   CURLcode status = curl_easy_perform(ctx->curl);
+   if (status!=CURLE_OK) {
+      return (600);
+   }
+
+   // get the response message
+   char *rsp = ctx->mem->mem;
+   TRACE(stderr, "rsp = %s\n", rsp);
+   if (strstr(rsp, "<ErrorResponse")) {
+      ctx->http_resp = 400; // not ok
+      if ((s=strstr(rsp, "<Message>"))) {
+         char *e;
+         if ((e=strstr(s, "</Message>"))) *e = '\0';
+         strncpy(ctx->error, s+9, CURL_ERROR_SIZE);
+         ctx->error[CURL_ERROR_SIZE-1] = '\0';
+      }
+   }
+
+   curl_easy_getinfo(ctx->curl, CURLINFO_RESPONSE_CODE, &ctx->http_resp);
+   if (ctx->http_resp>=300) {
+      syslog(LOG_ERR, "aws post of %s failed: %ld", qspost, ctx->http_resp);
+      return (ctx->http_resp);
+   }
+
+   free(b64msg);
+   free(e_b64msg);
+   free(timestamp);
+   free(e_timestamp);
+   free(qs);
+   free(sigin);
+   free(sig);
+   free(e_sig);
+   free(qspost);
+   free(e_url);
+   return (ctx->http_resp);
 }
 
 

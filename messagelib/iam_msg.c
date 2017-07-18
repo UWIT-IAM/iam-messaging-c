@@ -75,6 +75,28 @@ int iam_msgSendArn(RestContext *rctx, IamMessage *msg, char *cryptid, char *sign
    return ret;
 }
 
+int iam_msgSendSqs(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid) {
+   return iam_msgSendSqsQueue(rctx, msg, cryptid, signid, NULL);
+}
+
+int iam_msgSendSqsQueue(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid, char *queueUrl) {
+
+   char *emsg = iam_msgEncode(msg, cryptid, signid);
+   if (!emsg) {
+      syslog(LOG_ERR, "SNS could not encode");
+      return IAM_MSG_ERR_ENCODE;
+   }
+   int ret = 0;
+   if (queueUrl==NULL) ret = sqs_sendMessage(rctx, "gws", emsg, strlen(emsg));
+   else ret = sqs_sendMessageQueue(rctx, "gws", emsg, strlen(emsg), queueUrl);
+   if (ret!=200) {
+      syslog(LOG_ERR, "SQS send error: %d", ret);
+   }
+
+   iam_free(emsg);
+   return ret;
+}
+
 int iam_msgSendAzure(IamMessage *msg, char *cryptid, char *signid, char *namespace, char *topic) {
    char *emsg = iam_msgEncode(msg, cryptid, signid);
    if (!emsg) {
@@ -85,6 +107,7 @@ int iam_msgSendAzure(IamMessage *msg, char *cryptid, char *signid, char *namespa
    iam_free(emsg);
    return ret;
 }
+
 
 
 char *iam_msgEncode(IamMessage *msg, char *cryptid, char *signid) {
@@ -332,9 +355,9 @@ int iam_msgInit(char *cfgfile) {
       }
    }
 
+
    cJSON_Delete(cfg);
    iam_free(cfgjs);
-
 
    return (1);
 }

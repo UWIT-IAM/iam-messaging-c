@@ -38,5 +38,8 @@ int sqs_getNumMessages(RestContext *ctx);
 int sqs_getInfo();
 void freeSQSMessage(SQSMessage *sqs);
 int sqs_deleteMessage(RestContext *ctx, char *handle);
+int sqs_sendMessage(RestContext *ctx, char *sub, char *msg, int msgl);
+int sqs_sendMessageQueue(RestContext *ctx, char *sub, char *msg, int msgl, char *queueUrl);
+
 
 #endif

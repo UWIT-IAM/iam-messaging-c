@@ -1,9 +1,9 @@
 # simple makefile
 
-CFLAGS=-g -Wall -Wformat -Werror -I../messagelib
-LFLAGS=-L../messagelib -lmessaging -lcrypto -lssl -lcurl -lm -lpthread
+CFLAGS=-Wall -Wformat -Werror -I../messagelib
+LFLAGS=-L../messagelib -lmessaging -lcrypto -lssl -lcurl -lm -lpthread -luuid
 DEPS=../messagelib/libmessaging.a
-DEMOS=aws_send aws_recv thread_send azure_send azure_recv thread_recv
+DEMOS=aws_send aws_recv thread_send azure_send azure_recv thread_recv aws_send_sqs
 
 all:	$(DEMOS)
 
@@ -15,6 +15,9 @@ demo_recv.cgi:	demo_recv.cgi.o $(DEPS) sns_fcgi.o
 
 aws_send:	aws_send.o $(DEPS)
 	cc -g -o aws_send aws_send.o $(LFLAGS)
+	
+aws_send_sqs:	aws_send_sqs.o $(DEPS)
+	cc -g -o aws_send_sqs aws_send_sqs.o $(LFLAGS)
 	
 aws_recv:	aws_recv.o $(DEPS)
 	cc -g -o aws_recv aws_recv.o $(LFLAGS)

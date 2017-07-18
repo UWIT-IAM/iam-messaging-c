@@ -1,7 +1,7 @@
 # simple makefile
 
 CFLAGS=-g -Wall -Wformat -Werror -I../messagelib
-LFLAGS=-L../messagelib -lmessaging -lcrypto -lssl -lcurl -lm -lpthread
+LFLAGS=-L../messagelib -lmessaging -lcrypto -lssl -lcurl -lm -lpthread -luuid
 DEPS=../messagelib/libmessaging.a
 TESTS=test_msg test_crypt 
 

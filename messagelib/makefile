@@ -1,6 +1,6 @@
 # makefile for src
 
-CFLAGS=-g -Wall -Wformat -Werror 
+CFLAGS=-Wall -Wformat -Werror 
 # LFLAGS=-L. -liam_msg -lcrypto -lssl -lcurl -lm -lpthread
 INCL_DEP=aws_sns.h  aws_sqs.h  azure.h  cJSON.h  iam_crypt.h  iam_msg.h
 

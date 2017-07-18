@@ -39,6 +39,9 @@ IamMessage *iam_newIamMessage();
 void iam_freeIamMessage(IamMessage *msg);
 int iam_msgSend(RestContext *ctx, IamMessage *msg, char *cryptid, char *signid);
 int iam_msgSendArn(RestContext *ctx, IamMessage *msg, char *cryptid, char *signid, char *host, char *arn);
+int iam_msgSendSqs(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid);
+int iam_msgSendSqsQueue(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid, char *queueUrl);
+
 IamMessage *iam_msgRecv(RestContext *ctx);
 IamMessage *iam_msgParse();
 char *iam_msgEncode(IamMessage *msg, char *cryptid, char *signid);
