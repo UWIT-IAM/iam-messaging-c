@@ -1,8 +1,8 @@
 # simple makefile
 
 CFLAGS=-Wall -Wformat -Werror -I../messagelib
-LFLAGS=-L../messagelib -lmessaging -lcrypto -lssl -lcurl -lm -lpthread -luuid
-DEPS=../messagelib/libmessaging.a
+LFLAGS=-L../messagelib -liam-messaging -lcrypto -lssl -lcurl -lm -lpthread -luuid
+DEPS=../messagelib/libiam-messaging.a
 DEMOS=aws_send aws_recv thread_send azure_send azure_recv thread_recv aws_send_sqs
 
 all:	$(DEMOS)

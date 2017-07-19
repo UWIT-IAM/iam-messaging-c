@@ -2,12 +2,13 @@ This is the c version of the IAM AWS messaging library.
 
 The cJSON package is from Dave Gamble.  See the README.CJSON
 
-
 For usage examples see the demos:  demo_send, demo_recv, demo_recv.cgi, demo_gws_recv.c
 
 The configuration file is described in ../doc/readme.gws
 
 ----------------------------------------------------------------
+
+example:
 
 To receive messages from an SQS queue:
 

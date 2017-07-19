@@ -16,6 +16,19 @@ $ make
 $ make install
 
   installs the library in INSTALL_ROOT/lib
-  installs the includes in INSTALL_ROOT/include
+  installs the includes in INSTALL_ROOT/include/iam-messaging
 
+
+==========================
+
+Note.  The library works from includes in the source. 
+But includes are installed in (root)/include/iam-messaging
+
+so your apps must use, e.g.
+
+  #include <iam-messaging/iam_crypt.h>
+
+This is to avoid collisions and keep the install dir cleaner.
+
+Jim
 
