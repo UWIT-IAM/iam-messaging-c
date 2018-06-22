@@ -379,7 +379,7 @@ int sqs_sendMessageQueue(RestContext *ctx, char *sub, char *msg, int msgl, char 
    TRACE(stderr, "encurl=%s\n", e_url);
 
    char *b64msg = iam_dataToBase64(msg, msgl);
-   char *e_b64msg = iam_urlencode(b64msg);
+   // b64msg gets url encoded below
    char *timestamp = iam_timestampNow();
    char *e_timestamp = iam_urlencode(timestamp);
 
@@ -391,14 +391,13 @@ int sqs_sendMessageQueue(RestContext *ctx, char *sub, char *msg, int msgl, char 
    free(mid);
    cJSON_AddItemToObject(jdoc, "Subject", cJSON_CreateString(sub));
    cJSON_AddItemToObject(jdoc, "Timestamp", cJSON_CreateString(timestamp));
-   cJSON_AddItemToObject(jdoc, "Message", cJSON_CreateString(e_b64msg));
+   cJSON_AddItemToObject(jdoc, "Message", cJSON_CreateString(b64msg));
    char *wrapped = cJSON_PrintUnformatted(jdoc);
    char *e_wrapped = iam_urlencode(wrapped);
    cJSON_Delete(jdoc);
 
    int bufl = strlen(e_wrapped)+1024;
-   TRACE(stderr, "bufl=%d, b64msg=%zu, e_b64msg=%zu, e_timestamp=%zu\n",
-        bufl, strlen(b64msg), strlen(e_b64msg), strlen(e_timestamp) );
+   TRACE(stderr, "bufl=%d, b64msg=%zu, e_timestamp=%zu\n", bufl, strlen(b64msg), strlen(e_timestamp) );
    char *qs = (char*) malloc(bufl);
    char *qspost = (char*) malloc(bufl);
    snprintf(qs, bufl,
@@ -444,7 +443,6 @@ int sqs_sendMessageQueue(RestContext *ctx, char *sub, char *msg, int msgl, char 
    }
 
    free(b64msg);
-   free(e_b64msg);
    free(timestamp);
    free(e_timestamp);
    free(qs);
