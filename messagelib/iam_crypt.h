@@ -33,9 +33,11 @@ char *iam_computeAzureSignature256(char *key, char *str);
 char *iam_computeSignature(char *str, char *sigid);
 char *iam_genHmac(unsigned char *data, int dl, char *keyname);
 int iam_verifySignature(char *str, char *sigb64, char *sigurl);
+int iam_verifySignature_2(char *str, char *sigb64, char *sigurl);
 
 int iam_encryptText(char *keyname, char *in, int inlen, char **out, char **iv);
 int iam_decryptText(char *keyname, char *encb64, char **out, char *iv);
+int iam_decryptText_2(char *keyname, char *encb64, char **out, char *iv);
 int iam_addCryptkey(char *name, char *keyb64);
 
 int iam_crypt_init();

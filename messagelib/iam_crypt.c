@@ -430,12 +430,12 @@ char *iam_computeAzureSignature256(char *key, char *str) {
 /* create a signature.  locate cert by id   - returns malloc'd string */
 
 char *iam_computeSignature(char *str, char *sigid) {
-   EVP_MD_CTX *mctx;
+   EVP_MD_CTX *ctx;
    char sig[256];
    size_t sigl = 256;
    int ok = 1;
 
-   if ((mctx = EVP_MD_CTX_create())==NULL) {
+   if ((ctx = EVP_MD_CTX_create())==NULL) {
       return NULL;
    }
 
@@ -445,17 +445,17 @@ char *iam_computeSignature(char *str, char *sigid) {
       syslog(LOG_ERR, "can't find key for %s", sigid);
       ok = 0;
    }
-   if (ok && EVP_DigestSignInit(mctx, NULL, EVP_sha1(), NULL, pk->pkey)!=1) {
+   if (ok && EVP_DigestSignInit(ctx, NULL, EVP_sha1(), NULL, pk->pkey)!=1) {
       ok = 0;
    }
-   if (ok && EVP_DigestSignUpdate(mctx, str, strlen(str))!=1) {
+   if (ok && EVP_DigestSignUpdate(ctx, str, strlen(str))!=1) {
       ok = 0;
    }
-   if (ok && EVP_DigestSignFinal(mctx, (unsigned char*)sig, &sigl)!=1) {
+   if (ok && EVP_DigestSignFinal(ctx, (unsigned char*)sig, &sigl)!=1) {
       ok = 0;
    }
    
-   EVP_MD_CTX_destroy(mctx);
+   EVP_MD_CTX_destroy(ctx);
    if (!ok) return NULL;
    return iam_dataToBase64(sig, sigl);
 }
@@ -464,31 +464,81 @@ char *iam_computeSignature(char *str, char *sigid) {
 /* verify a signature.  localte cert by url */
 
 int iam_verifySignature(char *str, char *sigb64, char *sigurl) {
-   EVP_MD_CTX *mctx;
+   EVP_MD_CTX *ctx;
    char *sig;
    int sigl;
 
-   if ((mctx = EVP_MD_CTX_create())==NULL) {
+   if ((ctx = EVP_MD_CTX_create())==NULL) {
       syslog(LOG_ERR, "can't create context");
       return 0;
    }
 
    CertPKey *pk = findPubKey(NULL, sigurl);
    if (!pk) {
-      EVP_MD_CTX_destroy(mctx);
+      EVP_MD_CTX_destroy(ctx);
       syslog(LOG_ERR, "can't find cert at %s", sigurl);
       return (0);
    }
 
    iam_base64ToData(sigb64, strlen(sigb64), &sig, &sigl);
 
-   int r = EVP_VerifyInit(mctx, EVP_sha1());
-   r = EVP_VerifyUpdate(mctx, (void*) str, strlen(str));
-   r = EVP_VerifyFinal(mctx, (unsigned char*) sig, sigl, pk->pkey);
+   int r = EVP_VerifyInit(ctx, EVP_sha256());
+   r = EVP_VerifyUpdate(ctx, (void*) str, strlen(str));
+   r = EVP_VerifyFinal(ctx, (unsigned char*) sig, sigl, pk->pkey);
 
-   EVP_MD_CTX_destroy(mctx);
+   EVP_MD_CTX_destroy(ctx);
    free(sig);
    return (r);
+}
+
+/* verify a UWIT-2 signature. */
+
+int iam_verifySignature_2(char *str, char *sigb64, char *sigurl) {
+   const EVP_MD *md = NULL;
+   EVP_MD_CTX *mctx = NULL;
+   EVP_PKEY_CTX *pctx = NULL;
+   char *sig;
+   int siglen;
+   size_t str_len = strlen(str);
+
+   CertPKey *pk = findPubKey(NULL, sigurl);
+   if (!pk) {
+      syslog(LOG_ERR, "can't find cert at %s", sigurl);
+      return (0);
+   }
+
+   iam_base64ToData(sigb64, strlen(sigb64), &sig, &siglen);
+   mctx = EVP_MD_CTX_create();
+   md = EVP_get_digestbyname("sha256");
+   if (!md) {
+      syslog(LOG_ERR, "EVP_get_digestbyname failed");
+      return (0);
+   }
+
+   int rv = EVP_DigestVerifyInit(mctx, &pctx, md, NULL, pk->pkey);
+      
+   // add UWIT-2 parameters 
+   rv = EVP_PKEY_CTX_ctrl_str(pctx, "rsa_padding_mode", "pss");
+   if (!rv) {
+      syslog(LOG_ERR, "set rsa_padding_mode failed");
+      return (0);
+   }
+   rv = EVP_PKEY_CTX_ctrl_str(pctx, "rsa_pss_saltlen", "32");
+   if (!rv) {
+      syslog(LOG_ERR, "set rsa_pss_saltlen failed");
+      return (0);
+   }
+
+   rv = EVP_DigestVerifyUpdate(mctx, str, str_len);
+   rv = EVP_DigestVerifyFinal(mctx, (unsigned char *)sig, (unsigned int)siglen);
+
+   free(sig);
+   // note. pctx is freed automagically
+   EVP_MD_CTX_destroy(mctx);
+   EVP_cleanup();
+
+   printf("result: %d\n", rv);
+   return (rv);  // '1' is success, '0' is failure
 }
 
 /* Display some data in hex. Note no line breaking.
@@ -517,6 +567,7 @@ static char *bytesToHex(unsigned char *byt, int n)
 /* simple cryption */
 
 const EVP_CIPHER *crypt_cipher;
+const EVP_CIPHER *crypt_cipher_2;
 const EVP_MD *crypt_hash;
 
 
@@ -527,18 +578,20 @@ typedef struct Cryptkey_ {
    char *key;
    int keylen;
    const EVP_CIPHER *cipher;
+   const EVP_CIPHER *cipher_2;
    const EVP_MD *hash;
 } Cryptkey;
 
 Cryptkey *cryptkeys = NULL;
 // add a key from a b64 string
 
-static Cryptkey *newCryptkey(char *id, const EVP_CIPHER *cc, const EVP_MD *h, char *keyb64) {
+static Cryptkey *newCryptkey(char *id, const EVP_MD *h, char *keyb64) {
 
    Cryptkey *ck = (Cryptkey*) malloc(sizeof(Cryptkey));
    ck->id = iam_strdup(id);
    iam_base64ToData(keyb64, strlen(keyb64), &(ck->key), &(ck->keylen));
-   ck->cipher = cc;
+   ck->cipher = crypt_cipher;
+   ck->cipher_2 = crypt_cipher_2;
    ck->hash = h;
    ck->next = cryptkeys;
    cryptkeys = ck;
@@ -554,7 +607,7 @@ static Cryptkey *findCryptkey(char *id) {
 }
 
 int iam_addCryptkey(char *id, char *keyb64) {
-   newCryptkey(id, crypt_cipher, crypt_hash, keyb64);
+   newCryptkey(id, crypt_hash, keyb64);
    return (1);
 }
 
@@ -644,6 +697,46 @@ int iam_decryptText(char *keyname, char *encb64, char **out, char *iv64) {
    
 }
 
+int iam_decryptText_2(char *keyname, char *encb64, char **out, char *iv64) {
+
+   char *enctxt;
+   int enctxtl;
+   char *iv;
+   int r;
+
+   iam_base64ToData(iv64, strlen(iv64), &iv, NULL);
+   iam_base64ToData(encb64, strlen(encb64), (char**) &enctxt, &enctxtl);
+
+   Cryptkey *ck = findCryptkey(keyname);
+   if (!ck) return (0);
+
+   int blklen = EVP_CIPHER_block_size(crypt_cipher_2);
+   char *xmsg = (char*) malloc(enctxtl+blklen);
+   int xmsglen = 0;
+   char *ptr = xmsg;
+   int len = 0;
+   
+
+EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+r = EVP_DecryptInit_ex(ctx, crypt_cipher_2, NULL, (const unsigned char*)ck->key, (const unsigned char*)iv);
+printf("EVP_DecryptInit: %d\n", r);
+r = EVP_DecryptUpdate(ctx, (unsigned char*)xmsg, &xmsglen, (unsigned char*)enctxt, enctxtl);
+printf("EVP_DecryptUpdate: %d, xmsglen=%d\n", r, xmsglen);
+ptr += xmsglen;
+r = EVP_DecryptFinal_ex(ctx, (unsigned char*)ptr, &len);
+printf("EVP_DecryptFinal: %d, len=%d\n", r, len);
+xmsglen += len;
+
+
+   // int r = iam_crypt(ck, 0, xmsg, &xmsglen, enctxt, enctxtl, iv);
+   xmsg[xmsglen] = '\0';
+   *out = xmsg;
+   free(iv);
+   free(enctxt);
+
+   return (r);
+   
+}
 /* --- openssl thread needs ---- */
 static pthread_mutex_t *lock_cs;
 static long *lock_count;
@@ -707,6 +800,7 @@ int iam_crypt_init() {
    thread_setup();
 
    crypt_cipher = EVP_aes_128_cbc();
+   crypt_cipher_2 = EVP_aes_256_cbc();
    crypt_hash = EVP_sha1();
 
    curl_global_init(CURL_GLOBAL_ALL);

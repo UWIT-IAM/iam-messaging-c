@@ -202,6 +202,7 @@ IamMessage *iam_msgRecv(RestContext *ctx) {
 IamMessage *iam_msgParse(char *msg) {
 
    IamMessage *ret = iam_newIamMessage();
+   int v;
 
    cJSON *root = cJSON_Parse(msg);
    if (!root) {
@@ -234,7 +235,8 @@ IamMessage *iam_msgParse(char *msg) {
    char *sigtxt = (char*) malloc(sigtxtl);
    if (cryptid) sprintf(sigtxt, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", ct, iv, cryptid, ctx, uuid, mt, sndr, sigurl, ts, vers, emsg);
    else sprintf(sigtxt, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", ct, ctx, uuid, mt, sndr, sigurl, ts, vers, emsg);
-   int v = iam_verifySignature(sigtxt, sig, sigurl);
+   if (!strcmp(vers, "UWIT-2")) v = iam_verifySignature_2(sigtxt, sig, sigurl);
+   else v = iam_verifySignature(sigtxt, sig, sigurl);
    if (v!=1) {
       syslog(LOG_ERR, "msg verify fails, sender=%s, uuid=%s", sndr, uuid);
       return (NULL);
@@ -242,7 +244,8 @@ IamMessage *iam_msgParse(char *msg) {
 
    char *message;
    if (cryptid) {
-      v = iam_decryptText(cryptid, emsg, &message, iv);
+      if (!strcmp(vers, "UWIT-2")) v = iam_decryptText_2(cryptid, emsg, &message, iv);
+      else v = iam_decryptText(cryptid, emsg, &message, iv);
       if (v==0) {
          syslog(LOG_ERR, "decrypt fails\n");
          return (NULL);
@@ -250,6 +253,7 @@ IamMessage *iam_msgParse(char *msg) {
    } else {
       message = iam_base64ToText(emsg);
    }
+   printf("message: %s\n", message);
 
    ret->version = vers;
    ret->uuid = uuid;
