@@ -31,7 +31,9 @@
 char *prog;
 
 void usage() {
-   fprintf(stderr, "usage: %s [-c cfg_file] [-m message] [-f message_file] [-n num_msg] [-z] [-h host -a arn]\n", prog);
+   fprintf(stderr, "usage: %s [-c cfg_file] [-m message] [-f message_file] [-n num_msg] [-z] [-h host]\n", prog);
+   fprintf(stderr, "         [ -a sns_arn ] \n");
+   fprintf(stderr, "         [ -q sqs_queue ] \n");
    fprintf(stderr, "         [ -s  signid] [-d cryptid] \n");
    fprintf(stderr, "         -z  ( no crypt )\n");
    fprintf(stderr, "         -n  ( def = 2 )\n");
@@ -49,6 +51,7 @@ int main(int argc, char **argv) {
    char *host = NULL;
    char *arn = NULL;
    char *_arn = NULL;
+   char *queue = NULL;
 
    int i;
    int nsend = 2;
@@ -91,6 +94,10 @@ int main(int argc, char **argv) {
            if (--argc<=0) usage();
            _arn = (++argv)[0];
            break;
+        case 'q':
+           if (--argc<=0) usage();
+           queue = (++argv)[0];
+           break;
         case '?':
            usage();
         }
@@ -116,8 +123,12 @@ int main(int argc, char **argv) {
    RestContext *ctx = iam_restContext();
    for (i=0;i<nsend;i++) {
       printf("sending %zu bytes\n", strlen(msg->message));
-      if (host) iam_msgSendArn(ctx, msg, cryptid, signid, host, arn);
-      else iam_msgSend(ctx, msg, cryptid, signid);
+      if (queue) {
+          iam_msgSendSqsQueue(ctx, msg, cryptid, signid, queue);
+      } else {
+         if (host) iam_msgSendArn(ctx, msg, cryptid, signid, host, arn);
+         else iam_msgSend(ctx, msg, cryptid, signid);
+      }
    }
    iam_freeIamMessage(msg);
    exit (0);

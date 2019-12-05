@@ -164,7 +164,7 @@ int sns_sendMessageArn(RestContext *ctx, char *sub, char *msg, int msgl, char *h
    curl_easy_setopt (ctx->curl, CURLOPT_POSTFIELDS, sigin );
    CURLcode status = curl_easy_perform(ctx->curl);
    if (status!=CURLE_OK) {
-      return (600);
+      return (600+status);
    }
 
    // get the response message
