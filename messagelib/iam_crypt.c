@@ -430,12 +430,12 @@ char *iam_computeAzureSignature256(char *key, char *str) {
 /* create a signature.  locate cert by id   - returns malloc'd string */
 
 char *iam_computeSignature(char *str, char *sigid) {
-   EVP_MD_CTX *ctx;
+   EVP_MD_CTX *mctx;
    char sig[256];
    size_t sigl = 256;
    int ok = 1;
 
-   if ((ctx = EVP_MD_CTX_create())==NULL) {
+   if ((mctx = EVP_MD_CTX_create())==NULL) {
       return NULL;
    }
 
@@ -445,17 +445,17 @@ char *iam_computeSignature(char *str, char *sigid) {
       syslog(LOG_ERR, "can't find key for %s", sigid);
       ok = 0;
    }
-   if (ok && EVP_DigestSignInit(ctx, NULL, EVP_sha1(), NULL, pk->pkey)!=1) {
+   if (ok && EVP_DigestSignInit(mctx, NULL, EVP_sha1(), NULL, pk->pkey)!=1) {
       ok = 0;
    }
-   if (ok && EVP_DigestSignUpdate(ctx, str, strlen(str))!=1) {
+   if (ok && EVP_DigestSignUpdate(mctx, str, strlen(str))!=1) {
       ok = 0;
    }
-   if (ok && EVP_DigestSignFinal(ctx, (unsigned char*)sig, &sigl)!=1) {
+   if (ok && EVP_DigestSignFinal(mctx, (unsigned char*)sig, &sigl)!=1) {
       ok = 0;
    }
    
-   EVP_MD_CTX_destroy(ctx);
+   EVP_MD_CTX_destroy(mctx);
    if (!ok) return NULL;
    return iam_dataToBase64(sig, sigl);
 }
@@ -464,29 +464,29 @@ char *iam_computeSignature(char *str, char *sigid) {
 /* verify a signature.  localte cert by url */
 
 int iam_verifySignature(char *str, char *sigb64, char *sigurl) {
-   EVP_MD_CTX *ctx;
+   EVP_MD_CTX *mctx;
    char *sig;
    int sigl;
 
-   if ((ctx = EVP_MD_CTX_create())==NULL) {
+   if ((mctx = EVP_MD_CTX_create())==NULL) {
       syslog(LOG_ERR, "can't create context");
       return 0;
    }
 
    CertPKey *pk = findPubKey(NULL, sigurl);
    if (!pk) {
-      EVP_MD_CTX_destroy(ctx);
+      EVP_MD_CTX_destroy(mctx);
       syslog(LOG_ERR, "can't find cert at %s", sigurl);
       return (0);
    }
 
    iam_base64ToData(sigb64, strlen(sigb64), &sig, &sigl);
 
-   int r = EVP_VerifyInit(ctx, EVP_sha256());
-   r = EVP_VerifyUpdate(ctx, (void*) str, strlen(str));
-   r = EVP_VerifyFinal(ctx, (unsigned char*) sig, sigl, pk->pkey);
+   int r = EVP_VerifyInit(mctx, EVP_sha256());
+   r = EVP_VerifyUpdate(mctx, (void*) str, strlen(str));
+   r = EVP_VerifyFinal(mctx, (unsigned char*) sig, sigl, pk->pkey);
 
-   EVP_MD_CTX_destroy(ctx);
+   EVP_MD_CTX_destroy(mctx);
    free(sig);
    return (r);
 }
@@ -516,8 +516,8 @@ int iam_verifySignature_2(char *str, char *sigb64, char *sigurl) {
    }
 
    int rv = EVP_DigestVerifyInit(mctx, &pctx, md, NULL, pk->pkey);
-      
-   // add UWIT-2 parameters 
+ 
+   // add UWIT-2 parameters
    rv = EVP_PKEY_CTX_ctrl_str(pctx, "rsa_padding_mode", "pss");
    if (!rv) {
       syslog(LOG_ERR, "set rsa_padding_mode failed");
@@ -715,7 +715,7 @@ int iam_decryptText_2(char *keyname, char *encb64, char **out, char *iv64) {
    int xmsglen = 0;
    char *ptr = xmsg;
    int len = 0;
-   
+
 
 EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
 r = EVP_DecryptInit_ex(ctx, crypt_cipher_2, NULL, (const unsigned char*)ck->key, (const unsigned char*)iv);
@@ -735,7 +735,7 @@ xmsglen += len;
    free(enctxt);
 
    return (r);
-   
+
 }
 /* --- openssl thread needs ---- */
 static pthread_mutex_t *lock_cs;

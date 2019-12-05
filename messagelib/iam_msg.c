@@ -68,7 +68,12 @@ int iam_msgSendArn(RestContext *rctx, IamMessage *msg, char *cryptid, char *sign
    if (snshost==NULL) ret = sns_sendMessage(rctx, "gws", emsg, strlen(emsg));
    else ret = sns_sendMessageArn(rctx, "gws", emsg, strlen(emsg), snshost, snsarn);
    if (ret!=200) {
-      syslog(LOG_ERR, "SNS send error: %d", ret);
+      syslog(LOG_ERR, "SNS send error: %d, will retry", ret);
+      if (snshost==NULL) ret = sns_sendMessage(rctx, "gws", emsg, strlen(emsg));
+      else ret = sns_sendMessageArn(rctx, "gws", emsg, strlen(emsg), snshost, snsarn);
+      if (ret!=200) {
+         syslog(LOG_ERR, "SNS send error on retry: %d", ret);
+      }
    }
 
    iam_free(emsg);
