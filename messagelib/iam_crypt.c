@@ -1,5 +1,5 @@
 /* ========================================================================
- * Copyright (c) 2012-2103 The University of Washington
+ * Copyright (c) 2012 The University of Washington
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,9 @@
  * ========================================================================
  */
 
-/* Crypto for the messaging tools */
+/* Crypto for the messaging tools
+   ( requires openssl 1.0.2 (g) )
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,13 +39,10 @@
 #include <openssl/x509v3.h>
 
 #include <curl/curl.h>
-// #include <curl/types.h>
 #include <curl/easy.h>
 
 #include "iam_crypt.h"
 int iamVerbose = 0;
-int iamSyslog = 0;
-
 
 char *iam_strdup(char *s) {
    if (s) return strdup(s);
@@ -53,7 +52,7 @@ void iam_free(void *mem) {
    if (mem) free (mem);
 }
 
-/* get file to string */
+/* Get string from file */
 char *iam_getFile(char *name) {
    FILE *f = fopen(name, "rb");
    if (!f) {
@@ -78,7 +77,7 @@ char *iam_getFile(char *name) {
 
 /* --------- data conversion ----------------*/
 
-/* convert data to base64 - returns malloc'd string */
+/* Convert data to base64 - returns malloc'd string */
 
 char *iam_dataToBase64(char *txt, int txtl) {
    BIO *bmem, *b64;
@@ -99,7 +98,7 @@ char *iam_dataToBase64(char *txt, int txtl) {
    return ret;
 }
 
-/* convert base64 encoded text to data */
+/* Convert base64 encoded text to data - returns malloc'd string */
 
 int iam_base64ToData(char *txt64, int txt64l, char **data, int *datal) {
    char *buf;
@@ -119,7 +118,7 @@ int iam_base64ToData(char *txt64, int txt64l, char **data, int *datal) {
    return (1);
 }
 
-// convert b64 text to string.  returns malloc'd string
+/* Convert b64 text to string.  returns malloc'd string */
 char *iam_base64ToText(char *txt64) {
    char *buf;
    int bufl;
@@ -129,7 +128,7 @@ char *iam_base64ToText(char *txt64) {
    return (buf);
 }
 
-// generate a timestamp  - returns malloc'd string
+/* Generate a timestamp  - returns malloc'd string */
 
 char *iam_timestampNow() {
    char *ret = (char*) malloc(64);
@@ -145,7 +144,7 @@ char *iam_timestampNow() {
    return (ret);
 }
 
-// url encoding.  returns malloc'd string
+/* URL encoding.  returns malloc'd string */
 char rfc3986[256];
 char *iam_urlencode(char *txt) {
    char *enc = (char*) malloc(strlen(txt)*3 + 1);
@@ -165,6 +164,7 @@ char *iam_urlencode(char *txt) {
 }
 
 
+/***
 char *_iam_urlencode (char *txt) {
   int i;
   char *fixchar = " \n$&+,/:;=?@! ";
@@ -186,8 +186,9 @@ char *_iam_urlencode (char *txt) {
    }
    return (enc);
 }
+ ***/
 
-/* ---------- web page handler ---------------- */
+/* ---------- curl web page handlers ---------------- */
 
 size_t iam_page_reader(void *buf, size_t len, size_t num, void *wp)
 {
@@ -247,20 +248,7 @@ void iam_freeRestContext(RestContext *ctx) {
 }
 
 
-// initialize a curl struct
-
-/**
-int cleanupCurlContext() {
-   curl_easy_cleanup(curl);
-   curl = NULL;
-   free(curl_membuf->mem);
-   free(curl_membuf);
-   curl_membuf = NULL;
-}
-**/
-
-
-// get one page
+/* Get one page */
 
 char *iam_getPage(RestContext *ctx, char *url) {
 
@@ -278,7 +266,6 @@ char *iam_getPage(RestContext *ctx, char *url) {
    curl_easy_getinfo(ctx->curl, CURLINFO_RESPONSE_CODE, &ctx->http_resp);
    if (ctx->http_resp>=300) {
       syslog(LOG_ERR, "get of %s failed: %ld", url, ctx->http_resp);
-      // cleanupCurlContext();
       return (NULL);
    }
    char *rsp = strdup(ctx->mem->mem);
@@ -287,7 +274,7 @@ char *iam_getPage(RestContext *ctx, char *url) {
 }
 
 
-/* -----------  signature processing  ----------------- */
+/* -----------  Signature processing  ----------------- */
 
 /* certificate  key storage for signatures */
 typedef struct CertPKey_ {
@@ -321,7 +308,8 @@ static CertPKey *newPubKey(char *id, char *pem, char *url) {
    return (pk);
 }
 
-// find cached cert or download
+/* Find cached cert else fetch from URL. */
+
 static CertPKey *findPubKey(char *id, char *url) {
    CertPKey *key;
    for (key=pubKeys; key; key=key->next) {
@@ -339,7 +327,8 @@ static CertPKey *findPubKey(char *id, char *url) {
    return (NULL);
 }
 
-// external vers of above
+/* External vers of above */
+
 int iam_setPubKey(char *id, char *url) {
    if (findPubKey(id, url)) {
       return (1);
@@ -353,7 +342,7 @@ char *iam_getSignUrl(char *id) {
 } 
 
 
-// add a pvt key from a file (url)
+/* add a pvt key from a file (url) */
 static CertPKey *newPvtKey(char *id, char *url) {
   
    FILE *fp = fopen(url, "r");
@@ -373,7 +362,7 @@ static CertPKey *newPvtKey(char *id, char *url) {
    return (pk);
 }
 
-// find cached pvt key or read from file
+/* find cached private key else get from URL */
 static CertPKey *findPvtKey(char *id, char *url) {
    CertPKey *key;
    for (key=pvtKeys; key; key=key->next) {
@@ -385,13 +374,14 @@ static CertPKey *findPvtKey(char *id, char *url) {
    return (newPvtKey(id, url));
 }
 
-// public version of above
+/* Public version of above */
+
 int iam_setPvtKey(char *id, char *url) {
    if (findPvtKey(id, url)) return (1);
    return (0);
 }
  
-/* compute an aws signature - sha256 - returns malloc'd string  */
+/* Compute an AWS signature - returns malloc'd string  */
 
 char *iam_computeAWSSignature256(char *key, char *str) {
    HMAC_CTX ctx;
@@ -406,7 +396,7 @@ char *iam_computeAWSSignature256(char *key, char *str) {
    return iam_dataToBase64(sig, sigl);
 }
 
-/* compute an azure signature - sha256 - returns malloc'd string  */
+/* Compute an azure signature - returns malloc'd string  */
 
 char *iam_computeAzureSignature256(char *key, char *str) {
    HMAC_CTX ctx;
@@ -427,7 +417,7 @@ char *iam_computeAzureSignature256(char *key, char *str) {
 }
 
 
-/* create a signature.  locate cert by id   - returns malloc'd string */
+/* Create a UWIT-1 signature - returns malloc'd string (or NULL on error) */
 
 char *iam_computeSignature(char *str, char *sigid) {
    EVP_MD_CTX *mctx;
@@ -461,7 +451,7 @@ char *iam_computeSignature(char *str, char *sigid) {
 }
 
 
-/* verify a signature.  localte cert by url */
+/* Verify a UWIT-1 signature. */
 
 int iam_verifySignature(char *str, char *sigb64, char *sigurl) {
    EVP_MD_CTX *mctx;
@@ -482,7 +472,7 @@ int iam_verifySignature(char *str, char *sigb64, char *sigurl) {
 
    iam_base64ToData(sigb64, strlen(sigb64), &sig, &sigl);
 
-   int r = EVP_VerifyInit(mctx, EVP_sha256());
+   int r = EVP_VerifyInit(mctx, EVP_sha1());
    r = EVP_VerifyUpdate(mctx, (void*) str, strlen(str));
    r = EVP_VerifyFinal(mctx, (unsigned char*) sig, sigl, pk->pkey);
 
@@ -536,8 +526,6 @@ int iam_verifySignature_2(char *str, char *sigb64, char *sigurl) {
    // note. pctx is freed automagically
    EVP_MD_CTX_destroy(mctx);
    EVP_cleanup();
-
-   printf("result: %d\n", rv);
    return (rv);  // '1' is success, '0' is failure
 }
 
@@ -564,7 +552,7 @@ static char *bytesToHex(unsigned char *byt, int n)
 }
 #endif
 
-/* simple cryption */
+/* --------------- Encryption and decryption ---------------- */
 
 const EVP_CIPHER *crypt_cipher;
 const EVP_CIPHER *crypt_cipher_2;
@@ -583,7 +571,8 @@ typedef struct Cryptkey_ {
 } Cryptkey;
 
 Cryptkey *cryptkeys = NULL;
-// add a key from a b64 string
+
+// Add a key from a b64 string */
 
 static Cryptkey *newCryptkey(char *id, const EVP_MD *h, char *keyb64) {
 
@@ -626,7 +615,8 @@ char *iam_genHmac(unsigned char *data, int dl, char *keyname)
    return (ret);
 }
 
-/* encrypt or decrypt */
+/* Encrypt or decrypt (UWIT-1) */
+
 int iam_crypt(Cryptkey *ck, int mode, char *out, int *outlen, char *in, int inlen, char *iv)
 {
    int ol;
@@ -648,7 +638,8 @@ int iam_crypt(Cryptkey *ck, int mode, char *out, int *outlen, char *in, int inle
    return (0);
 }
 
-// returns a malloc'd string (base64 of the encrypted data) and the IV (also b64)
+/* Encrypt text (UWIT-1) - returns a malloc'd string (base64 of the encrypted data) and the IV (also b64) */
+
 int iam_encryptText(char *keyname, char *in, int inlen, char **out64, char **iv64) {
    
    Cryptkey *ck = findCryptkey(keyname);
@@ -671,6 +662,8 @@ int iam_encryptText(char *keyname, char *in, int inlen, char **out64, char **iv6
    free(enctxt);
    return (r);
 }
+
+/* Decrypt text (UWIT-1) - returns a malloc'd string */
 
 int iam_decryptText(char *keyname, char *encb64, char **out, char *iv64) {
 
@@ -697,6 +690,8 @@ int iam_decryptText(char *keyname, char *encb64, char **out, char *iv64) {
    
 }
 
+/* Decrypt text (UWIT-2) */
+
 int iam_decryptText_2(char *keyname, char *encb64, char **out, char *iv64) {
 
    char *enctxt;
@@ -716,19 +711,13 @@ int iam_decryptText_2(char *keyname, char *encb64, char **out, char *iv64) {
    char *ptr = xmsg;
    int len = 0;
 
+   EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+   r = EVP_DecryptInit_ex(ctx, crypt_cipher_2, NULL, (const unsigned char*)ck->key, (const unsigned char*)iv);
+   r = EVP_DecryptUpdate(ctx, (unsigned char*)xmsg, &xmsglen, (unsigned char*)enctxt, enctxtl);
+   ptr += xmsglen;
+   r = EVP_DecryptFinal_ex(ctx, (unsigned char*)ptr, &len);
+   xmsglen += len;
 
-EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-r = EVP_DecryptInit_ex(ctx, crypt_cipher_2, NULL, (const unsigned char*)ck->key, (const unsigned char*)iv);
-printf("EVP_DecryptInit: %d\n", r);
-r = EVP_DecryptUpdate(ctx, (unsigned char*)xmsg, &xmsglen, (unsigned char*)enctxt, enctxtl);
-printf("EVP_DecryptUpdate: %d, xmsglen=%d\n", r, xmsglen);
-ptr += xmsglen;
-r = EVP_DecryptFinal_ex(ctx, (unsigned char*)ptr, &len);
-printf("EVP_DecryptFinal: %d, len=%d\n", r, len);
-xmsglen += len;
-
-
-   // int r = iam_crypt(ck, 0, xmsg, &xmsglen, enctxt, enctxtl, iv);
    xmsg[xmsglen] = '\0';
    *out = xmsg;
    free(iv);
@@ -737,6 +726,7 @@ xmsglen += len;
    return (r);
 
 }
+
 /* --- openssl thread needs ---- */
 static pthread_mutex_t *lock_cs;
 static long *lock_count;

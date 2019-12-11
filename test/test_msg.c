@@ -39,7 +39,7 @@ void usage() {
 int main(int argc, char **argv) {
    
    char *cfgfile = "test.conf";
-   int lim = 1000;
+   int lim = 1;
    char *limt;
    char *datafile = "mockdata/iammsg.0";
 
@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
      IamMessage *msg = iam_msgParse(s);
      if (!msg) {
          fprintf(stderr, "message parse failed, i=%d\n", i);
-         break;
+         exit (1);
      }
      iam_freeIamMessage(msg);
      n++;

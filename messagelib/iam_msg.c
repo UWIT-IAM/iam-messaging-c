@@ -51,11 +51,13 @@ void iam_freeIamMessage(IamMessage *msg) {
 }
 
 
-// send a version 1 message to AWS
+/* Send a UWIT-1 message to AWS SNS (default ARN) */
 
 int iam_msgSend(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid) {
    return iam_msgSendArn(rctx, msg, cryptid, signid, NULL, NULL);
 }
+
+/* Send a UWIT-1 message to AWS SNS (by ARN) */
 
 int iam_msgSendArn(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid, char *snshost, char *snsarn) {
 
@@ -80,9 +82,13 @@ int iam_msgSendArn(RestContext *rctx, IamMessage *msg, char *cryptid, char *sign
    return ret;
 }
 
+/* Send a UWIT-1 message to AWS SQS (default queue) */
+
 int iam_msgSendSqs(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid) {
    return iam_msgSendSqsQueue(rctx, msg, cryptid, signid, NULL);
 }
+
+/* Send a UWIT-1 message to AWS SQS (by queue url) */
 
 int iam_msgSendSqsQueue(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid, char *queueUrl) {
 
@@ -102,6 +108,8 @@ int iam_msgSendSqsQueue(RestContext *rctx, IamMessage *msg, char *cryptid, char 
    return ret;
 }
 
+/* Send a UWIT-1 message to Azure */
+
 int iam_msgSendAzure(IamMessage *msg, char *cryptid, char *signid, char *namespace, char *topic) {
    char *emsg = iam_msgEncode(msg, cryptid, signid);
    if (!emsg) {
@@ -114,6 +122,7 @@ int iam_msgSendAzure(IamMessage *msg, char *cryptid, char *signid, char *namespa
 }
 
 
+/* Ecode a UWIT-1 message */
 
 char *iam_msgEncode(IamMessage *msg, char *cryptid, char *signid) {
 
@@ -187,6 +196,8 @@ char *iam_msgEncode(IamMessage *msg, char *cryptid, char *signid) {
    return out;
 }
 
+/* Receive a UWIT-1 message */
+
 IamMessage *iam_msgRecv(RestContext *ctx) {
 
    SQSMessage *msg = sqs_getMessage(ctx);
@@ -203,6 +214,8 @@ IamMessage *iam_msgRecv(RestContext *ctx) {
    freeSQSMessage(msg);
    return (ret);
 }
+
+/* Parse an UWIT-1 messagea - includes signature verify and optional decrypt */
 
 IamMessage *iam_msgParse(char *msg) {
 
@@ -258,8 +271,6 @@ IamMessage *iam_msgParse(char *msg) {
    } else {
       message = iam_base64ToText(emsg);
    }
-   printf("message: %s\n", message);
-
    ret->version = vers;
    ret->uuid = uuid;
    ret->messageContext = iam_base64ToText(ctx);
@@ -275,6 +286,8 @@ IamMessage *iam_msgParse(char *msg) {
    
    return ret;
 }
+
+/* Initialize */
 
 int iam_msgInit(char *cfgfile) {
    int i;
@@ -310,9 +323,7 @@ int iam_msgInit(char *cfgfile) {
       if (!strcmp(slog, "local6")) l = LOG_LOCAL6;
       if (!strcmp(slog, "local7")) l = LOG_LOCAL7;
       openlog(snam, LOG_PID, l);
-      iamSyslog = 1;
    }
-   if (iamSyslog) syslog(LOG_INFO, "%s starting", snam);
 
    cJSON *aws = cJSON_GetObjectItem(cfg, "aws");
    if (aws) {
