@@ -5,7 +5,7 @@ CFLAGS=-Wall -Wformat -Werror
 INCL_DEP=aws_sns.h  aws_sqs.h  azure.h  cJSON.h  iam_crypt.h  iam_msg.h
 
 
-DEST=$(INSTALL_DEST)
+DEST=/ux01/fox/centos7
 DEST_LIB=$(DEST)/lib
 DEST_INC=$(DEST)/include/iam-messaging
 

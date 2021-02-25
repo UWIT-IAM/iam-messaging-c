@@ -1,6 +1,6 @@
 # make library, then demos
 
-INSTALL_DEST=/usr/local
+INSTALL_DEST=/ux01/fox/centos7
 
 all:	library demos
 
