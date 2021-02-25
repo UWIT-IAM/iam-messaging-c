@@ -51,11 +51,13 @@ void iam_freeIamMessage(IamMessage *msg) {
 }
 
 
-// send a version 1 message to AWS
+/* Send a UWIT-1 message to AWS SNS (default ARN) */
 
 int iam_msgSend(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid) {
    return iam_msgSendArn(rctx, msg, cryptid, signid, NULL, NULL);
 }
+
+/* Send a UWIT-1 message to AWS SNS (by ARN) */
 
 int iam_msgSendArn(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid, char *snshost, char *snsarn) {
 
@@ -80,9 +82,13 @@ int iam_msgSendArn(RestContext *rctx, IamMessage *msg, char *cryptid, char *sign
    return ret;
 }
 
+/* Send a UWIT-1 message to AWS SQS (default queue) */
+
 int iam_msgSendSqs(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid) {
    return iam_msgSendSqsQueue(rctx, msg, cryptid, signid, NULL);
 }
+
+/* Send a UWIT-1 message to AWS SQS (by queue url) */
 
 int iam_msgSendSqsQueue(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid, char *queueUrl) {
 
@@ -102,6 +108,8 @@ int iam_msgSendSqsQueue(RestContext *rctx, IamMessage *msg, char *cryptid, char 
    return ret;
 }
 
+/* Send a UWIT-1 message to Azure */
+
 int iam_msgSendAzure(IamMessage *msg, char *cryptid, char *signid, char *namespace, char *topic) {
    char *emsg = iam_msgEncode(msg, cryptid, signid);
    if (!emsg) {
@@ -114,6 +122,7 @@ int iam_msgSendAzure(IamMessage *msg, char *cryptid, char *signid, char *namespa
 }
 
 
+/* Ecode a UWIT-1 message */
 
 char *iam_msgEncode(IamMessage *msg, char *cryptid, char *signid) {
 
@@ -187,6 +196,8 @@ char *iam_msgEncode(IamMessage *msg, char *cryptid, char *signid) {
    return out;
 }
 
+/* Receive a UWIT-1 message */
+
 IamMessage *iam_msgRecv(RestContext *ctx) {
 
    SQSMessage *msg = sqs_getMessage(ctx);
@@ -204,9 +215,12 @@ IamMessage *iam_msgRecv(RestContext *ctx) {
    return (ret);
 }
 
+/* Parse an UWIT-1 messagea - includes signature verify and optional decrypt */
+
 IamMessage *iam_msgParse(char *msg) {
 
    IamMessage *ret = iam_newIamMessage();
+   int v;
 
    cJSON *root = cJSON_Parse(msg);
    if (!root) {
@@ -239,7 +253,8 @@ IamMessage *iam_msgParse(char *msg) {
    char *sigtxt = (char*) malloc(sigtxtl);
    if (cryptid) sprintf(sigtxt, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", ct, iv, cryptid, ctx, uuid, mt, sndr, sigurl, ts, vers, emsg);
    else sprintf(sigtxt, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", ct, ctx, uuid, mt, sndr, sigurl, ts, vers, emsg);
-   int v = iam_verifySignature(sigtxt, sig, sigurl);
+   if (!strcmp(vers, "UWIT-2")) v = iam_verifySignature_2(sigtxt, sig, sigurl);
+   else v = iam_verifySignature(sigtxt, sig, sigurl);
    if (v!=1) {
       syslog(LOG_ERR, "msg verify fails, sender=%s, uuid=%s", sndr, uuid);
       return (NULL);
@@ -247,7 +262,8 @@ IamMessage *iam_msgParse(char *msg) {
 
    char *message;
    if (cryptid) {
-      v = iam_decryptText(cryptid, emsg, &message, iv);
+      if (!strcmp(vers, "UWIT-2")) v = iam_decryptText_2(cryptid, emsg, &message, iv);
+      else v = iam_decryptText(cryptid, emsg, &message, iv);
       if (v==0) {
          syslog(LOG_ERR, "decrypt fails\n");
          return (NULL);
@@ -255,7 +271,6 @@ IamMessage *iam_msgParse(char *msg) {
    } else {
       message = iam_base64ToText(emsg);
    }
-
    ret->version = vers;
    ret->uuid = uuid;
    ret->messageContext = iam_base64ToText(ctx);
@@ -271,6 +286,8 @@ IamMessage *iam_msgParse(char *msg) {
    
    return ret;
 }
+
+/* Initialize */
 
 int iam_msgInit(char *cfgfile) {
    int i;
@@ -306,9 +323,7 @@ int iam_msgInit(char *cfgfile) {
       if (!strcmp(slog, "local6")) l = LOG_LOCAL6;
       if (!strcmp(slog, "local7")) l = LOG_LOCAL7;
       openlog(snam, LOG_PID, l);
-      iamSyslog = 1;
    }
-   if (iamSyslog) syslog(LOG_INFO, "%s starting", snam);
 
    cJSON *aws = cJSON_GetObjectItem(cfg, "aws");
    if (aws) {
