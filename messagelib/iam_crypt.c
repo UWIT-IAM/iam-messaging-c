@@ -450,6 +450,51 @@ char *iam_computeSignature(char *str, char *sigid) {
    return iam_dataToBase64(sig, sigl);
 }
 
+/* Create a UWIT-2 signature - returns malloc'd string (or NULL on error) */
+
+char *iam_computeSignature_2(char *str, char *sigid) {
+   EVP_MD_CTX *mctx;
+   EVP_PKEY_CTX *pctx = NULL;
+   char sig[256];
+   size_t sigl = 256;
+   int ok = 1;
+
+   if ((mctx = EVP_MD_CTX_create())==NULL) {
+      return NULL;
+   }
+
+   // find the private key
+   CertPKey *pk = findPvtKey(sigid, NULL);
+   if (!pk) {
+      syslog(LOG_ERR, "can't find key for %s", sigid);
+      ok = 0;
+   }
+   if (ok && EVP_DigestSignInit(mctx, &pctx, EVP_sha256(), NULL, pk->pkey)!=1) {
+      ok = 0;
+   }
+
+   // add UWIT-2 parameters
+   if (!EVP_PKEY_CTX_ctrl_str(pctx, "rsa_padding_mode", "pss")) {
+      syslog(LOG_ERR, "set rsa_padding_mode failed");
+      return (0);
+   }
+   if (!EVP_PKEY_CTX_ctrl_str(pctx, "rsa_pss_saltlen", "32")) {
+      syslog(LOG_ERR, "set rsa_pss_saltlen failed");
+      return (0);
+   }
+
+   if (ok && EVP_DigestSignUpdate(mctx, str, strlen(str))!=1) {
+      ok = 0;
+   }
+   if (ok && EVP_DigestSignFinal(mctx, (unsigned char*)sig, &sigl)!=1) {
+      ok = 0;
+   }
+   
+   EVP_MD_CTX_destroy(mctx);
+   if (!ok) return NULL;
+   return iam_dataToBase64(sig, sigl);
+}
+
 
 /* Verify a UWIT-1 signature. */
 
@@ -688,6 +733,45 @@ int iam_decryptText(char *keyname, char *encb64, char **out, char *iv64) {
 
    return (r);
    
+}
+
+/* Encrypt text (UWIT-2) - returns a malloc'd string (base64 of the encrypted data) and the IV (also b64) */
+
+int iam_encryptText_2(char *keyname, char *in, int inlen, char **out64, char **iv64) {
+
+   int r;
+   *out64 = NULL;
+   Cryptkey *ck = findCryptkey(keyname);
+
+   int ivl = EVP_CIPHER_iv_length(crypt_cipher_2);
+   char iv[EVP_MAX_IV_LENGTH];
+   RAND_bytes((unsigned char*)iv, ivl);
+   if (iv64!=NULL) {
+      *iv64 = iam_dataToBase64(iv, ivl);
+   }
+
+   int blklen = EVP_CIPHER_block_size(crypt_cipher_2);
+   char *enctxt = (char*)malloc(inlen + blklen);
+   char *enctxtp = enctxt;
+   int enclen;
+   int len;
+
+   EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+   r = EVP_EncryptInit_ex(ctx, crypt_cipher_2, NULL, (const unsigned char*)ck->key, (const unsigned char*)iv);
+   r = EVP_EncryptUpdate(ctx, (unsigned char*)enctxt, &len, (unsigned char*)in, inlen);
+   enclen = len;
+   enctxtp += len;
+   r = EVP_EncryptFinal_ex(ctx, (unsigned char*)enctxtp, &len);
+   
+   enclen += len;
+   EVP_CIPHER_CTX_cleanup(ctx);
+   free(ctx);
+
+   if (!r) return (0);
+
+   *out64 = iam_dataToBase64(enctxt, enclen);
+   free(enctxt);
+   return (enclen);
 }
 
 /* Decrypt text (UWIT-2) */

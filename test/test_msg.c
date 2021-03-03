@@ -15,7 +15,7 @@
  * ========================================================================
  */
 
-/* Recv message and parse 1000000 times */
+/* create/parse messages - allow multiple executions for valgrind */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +32,7 @@
 char *prog;
 
 void usage() {
-   fprintf(stderr, "usage: %s [-c cfg_file] [-d data_file] [-n num_cycles] \n", prog);
+   fprintf(stderr, "usage: %s [-c cfg_file] [-t text_file] [-d data_file] [-n num_cycles] [-i9n] \n", prog);
    exit (1);
 }
 
@@ -42,6 +42,8 @@ int main(int argc, char **argv) {
    int lim = 1;
    char *limt;
    char *datafile = "mockdata/iammsg.0";
+   char *textfile = NULL;
+   char *vers = "UWIT-2";
 
    prog = argv[0];
    while (--argc > 0) {
@@ -55,6 +57,13 @@ int main(int argc, char **argv) {
         case 'd':
            if (--argc<=0) usage();
            datafile = (++argv)[0];
+           break;
+        case 't':
+           if (--argc<=0) usage();
+           textfile = (++argv)[0];
+           break;
+        case '1':
+           vers = "UWIT-1";
            break;
         case 'n':
            if (--argc<=0) usage();
@@ -72,9 +81,39 @@ int main(int argc, char **argv) {
       exit(1);
    }
 
-  printf("%d tests\n", lim);
-  int n=0;
-  int i;
+   printf("%d tests, vers=%s\n", lim, vers);
+   int n=0;
+   int i;
+   char *cryptid = "testcrypt2";
+   char *sigid = "testsig1";
+   char *msgout = "xxx";
+
+   /* create a signed and excrypted message */
+   char *emsg = NULL;
+   if (textfile!=NULL) {
+      for (i=0; i<lim; i++) {
+         IamMessage *msg = iam_newIamMessage();
+         msg->version = strdup(vers);
+         msg->contentType = strdup("json");
+         msg->messageContext = strdup("some-message-context");
+         msg->messageType = strdup("test");
+         msg->message = iam_getFile(textfile);
+         msg->sender = strdup("iam-messaging-c");
+         emsg = iam_msgEncode(msg, cryptid, sigid);
+         if (lim==1 && msgout!=NULL) {
+            char *b64 = iam_dataToBase64(emsg, strlen(emsg));
+            FILE *fp = fopen(msgout, "w");
+            fputs(b64, fp);
+            fclose(fp);
+            free(b64);
+         }
+         free(emsg);
+         iam_freeIamMessage(msg);
+      }
+   }
+  
+   /* Parse a signed and encrypted message */
+
   char *s = iam_getFile(datafile);
   for (i=0;i<lim;i++) {
      IamMessage *msg = iam_msgParse(s);

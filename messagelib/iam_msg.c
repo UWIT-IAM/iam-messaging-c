@@ -57,7 +57,7 @@ int iam_msgSend(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid)
    return iam_msgSendArn(rctx, msg, cryptid, signid, NULL, NULL);
 }
 
-/* Send a UWIT-1 message to AWS SNS (by ARN) */
+/* Send a message to AWS SNS (by ARN) */
 
 int iam_msgSendArn(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid, char *snshost, char *snsarn) {
 
@@ -82,13 +82,13 @@ int iam_msgSendArn(RestContext *rctx, IamMessage *msg, char *cryptid, char *sign
    return ret;
 }
 
-/* Send a UWIT-1 message to AWS SQS (default queue) */
+/* Send a message to AWS SQS (default queue) */
 
 int iam_msgSendSqs(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid) {
    return iam_msgSendSqsQueue(rctx, msg, cryptid, signid, NULL);
 }
 
-/* Send a UWIT-1 message to AWS SQS (by queue url) */
+/* Send a message to AWS SQS (by queue url) */
 
 int iam_msgSendSqsQueue(RestContext *rctx, IamMessage *msg, char *cryptid, char *signid, char *queueUrl) {
 
@@ -108,7 +108,7 @@ int iam_msgSendSqsQueue(RestContext *rctx, IamMessage *msg, char *cryptid, char 
    return ret;
 }
 
-/* Send a UWIT-1 message to Azure */
+/* Send a message to Azure */
 
 int iam_msgSendAzure(IamMessage *msg, char *cryptid, char *signid, char *namespace, char *topic) {
    char *emsg = iam_msgEncode(msg, cryptid, signid);
@@ -122,14 +122,15 @@ int iam_msgSendAzure(IamMessage *msg, char *cryptid, char *signid, char *namespa
 }
 
 
-/* Ecode a UWIT-1 message */
+/* Encode a message */
 
 char *iam_msgEncode(IamMessage *msg, char *cryptid, char *signid) {
 
    char *iv = NULL;
    char *emsg = NULL;
+   char *vers = NULL;
 
-   char *vers = "UWIT-1";
+   vers = msg->version;
    if (!msg->timestamp) msg->timestamp = iam_timestampNow();
    char *ts = msg->timestamp;
    char *ct = msg->contentType;
@@ -144,7 +145,9 @@ char *iam_msgEncode(IamMessage *msg, char *cryptid, char *signid) {
 
    // encrypt the message with the crypt key
    if (cryptid) {
-      int r = iam_encryptText(cryptid, msg->message, strlen(msg->message), &emsg, &iv);
+      int r;
+      if (!strcmp(vers, "UWIT-2")) r = iam_encryptText_2(cryptid, msg->message, strlen(msg->message), &emsg, &iv);
+      else r = iam_encryptText(cryptid, msg->message, strlen(msg->message), &emsg, &iv);
       if (r==0) {
          syslog(LOG_ERR, "encrypt fails! id=%s", cryptid);
          return (NULL);
@@ -159,14 +162,16 @@ char *iam_msgEncode(IamMessage *msg, char *cryptid, char *signid) {
    char *sigurl = iam_getSignUrl(signid);
    if (cryptid) sprintf(sigtxt, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", ct, iv, cryptid, ctx, uuid, mt, sndr, sigurl, ts, vers, emsg);
    else sprintf(sigtxt, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", ct, ctx, uuid, mt, sndr, sigurl, ts, vers, emsg);
-   char *sig = iam_computeSignature(sigtxt, signid);
+   char *sig;
+   if (!strcmp(vers, "UWIT-2")) sig = iam_computeSignature_2(sigtxt, signid);
+   else sig = iam_computeSignature(sigtxt, signid);
    if (!sig) {
       syslog(LOG_ERR, "sig fails!");
       return (NULL);
    }
    
    cJSON *jhdr = cJSON_CreateObject();
-   cJSON_AddStringToObject(jhdr, "version", "UWIT-1");
+   cJSON_AddStringToObject(jhdr, "version", vers);
    cJSON_AddStringToObject(jhdr, "contentType", ct);
    cJSON_AddStringToObject(jhdr, "messageContext", ctx);
    cJSON_AddStringToObject(jhdr, "messageType", mt);
@@ -196,7 +201,7 @@ char *iam_msgEncode(IamMessage *msg, char *cryptid, char *signid) {
    return out;
 }
 
-/* Receive a UWIT-1 message */
+/* Receive a UWIT-x message */
 
 IamMessage *iam_msgRecv(RestContext *ctx) {
 
@@ -215,7 +220,7 @@ IamMessage *iam_msgRecv(RestContext *ctx) {
    return (ret);
 }
 
-/* Parse an UWIT-1 messagea - includes signature verify and optional decrypt */
+/* Parse a UWIT-x message - includes signature verify and optional decrypt */
 
 IamMessage *iam_msgParse(char *msg) {
 
