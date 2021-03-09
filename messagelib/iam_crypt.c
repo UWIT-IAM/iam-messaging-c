@@ -549,6 +549,11 @@ int iam_verifySignature_2(char *str, char *sigb64, char *sigurl) {
       syslog(LOG_ERR, "EVP_get_digestbyname failed");
       return (0);
    }
+   md = EVP_get_digestbyname("sha256");
+   if (!md) {
+      syslog(LOG_ERR, "EVP_get_digestbyname failed - 2");
+      return (0);
+   }
 
    int rv = EVP_DigestVerifyInit(mctx, &pctx, md, NULL, pk->pkey);
  
@@ -570,7 +575,7 @@ int iam_verifySignature_2(char *str, char *sigb64, char *sigurl) {
    free(sig);
    // note. pctx is freed automagically
    EVP_MD_CTX_destroy(mctx);
-   EVP_cleanup();
+   // EVP_cleanup();
    return (rv);  // '1' is success, '0' is failure
 }
 
@@ -868,6 +873,8 @@ int iam_crypt_init() {
 
    // init openssl
    OpenSSL_add_all_algorithms();
+   // When openssl 1.1
+   // OPENSSL_init_crypto();
    SSL_load_error_strings();
    SSL_library_init();
 

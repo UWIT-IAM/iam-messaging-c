@@ -4,7 +4,7 @@ CFLAGS=-g -Wall -Wformat -Werror -I../messagelib
 LFLAGS=-L../messagelib -liam-messaging -lcrypto -lssl -lcurl -lm -lpthread -luuid
 DEPS=../messagelib/libiam-messaging.a
 
-TESTS=test_msg test_crypt sigtest
+TESTS=test_msg test_crypt sigtest i9ntest
 
 
 all:	$(TESTS)
@@ -20,6 +20,9 @@ test_crypt:	test_crypt.o $(DEPS)
 	
 sigtest:	sigtest.o $(DEPS)
 	cc -g -o sigtest sigtest.o $(LFLAGS)
+	
+i9ntest:	i9ntest.o $(DEPS)
+	cc -g -o i9ntest i9ntest.o $(LFLAGS)
 	
 clean:
 	rm -f *.o  $(TESTS)

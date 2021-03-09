@@ -32,7 +32,7 @@
 char *prog;
 
 void usage() {
-   fprintf(stderr, "usage: %s [-c cfg_file] [-t text_file] [-d data_file] [-n num_cycles] [-i9n] \n", prog);
+   fprintf(stderr, "usage: %s [-c cfg_file] [-t text_file] [-n num_cycles] [-9 i9n_testname] \n", prog);
    exit (1);
 }
 
@@ -41,9 +41,11 @@ int main(int argc, char **argv) {
    char *cfgfile = "test.conf";
    int lim = 1;
    char *limt;
-   char *datafile = "mockdata/iammsg.0";
-   char *textfile = NULL;
-   char *vers = "UWIT-2";
+   char *i9nfile = NULL;
+   char *textfile = "mockdata/sigtest.txt";
+
+   char *vers = "UWIT-2";   // assignments for v2 messages
+   char *cryptid = "testcrypt2";
 
    prog = argv[0];
    while (--argc > 0) {
@@ -54,16 +56,17 @@ int main(int argc, char **argv) {
            if (--argc<=0) usage();
            cfgfile = (++argv)[0];
            break;
-        case 'd':
-           if (--argc<=0) usage();
-           datafile = (++argv)[0];
-           break;
         case 't':
            if (--argc<=0) usage();
            textfile = (++argv)[0];
            break;
+        case '9':
+           if (--argc<=0) usage();
+           i9nfile = (++argv)[0];
+           break;
         case '1':
            vers = "UWIT-1";
+           cryptid = "testcrypt1"; // crypt key is specific to the version
            break;
         case 'n':
            if (--argc<=0) usage();
@@ -84,47 +87,62 @@ int main(int argc, char **argv) {
    printf("%d tests, vers=%s\n", lim, vers);
    int n=0;
    int i;
-   char *cryptid = "testcrypt2";
    char *sigid = "testsig1";
-   char *msgout = "xxx";
 
    /* create a signed and excrypted message */
    char *emsg = NULL;
+   char *emsg_sav;
    if (textfile!=NULL) {
+      char *msg_txt = iam_getFile(textfile);
       for (i=0; i<lim; i++) {
          IamMessage *msg = iam_newIamMessage();
          msg->version = strdup(vers);
          msg->contentType = strdup("json");
          msg->messageContext = strdup("some-message-context");
          msg->messageType = strdup("test");
-         msg->message = iam_getFile(textfile);
+         msg->message = strdup(msg_txt);
          msg->sender = strdup("iam-messaging-c");
          emsg = iam_msgEncode(msg, cryptid, sigid);
-         if (lim==1 && msgout!=NULL) {
+         // printf("emsg=%s\n", emsg);
+         if (lim==1 && i9nfile!=NULL) {
+            char *fname = (char*) malloc(strlen(i9nfile)+20);
             char *b64 = iam_dataToBase64(emsg, strlen(emsg));
-            FILE *fp = fopen(msgout, "w");
+            sprintf(fname, "%s.enc", i9nfile); 
+            FILE *fp = fopen(fname , "w");
             fputs(b64, fp);
             fclose(fp);
+            sprintf(fname, "%s.txt", i9nfile); 
+            fp = fopen(fname , "w");
+            fputs(msg_txt, fp);
+            fclose(fp);
             free(b64);
+
          }
+         if (i==0) emsg_sav = strdup(emsg);
          free(emsg);
          iam_freeIamMessage(msg);
       }
+      free(msg_txt);
    }
+
+   // printf("emsg_sav = %s\n", emsg_sav);
   
    /* Parse a signed and encrypted message */
 
-  char *s = iam_getFile(datafile);
+  char *s = emsg_sav;
   for (i=0;i<lim;i++) {
+     s = strdup(emsg_sav);
      IamMessage *msg = iam_msgParse(s);
      if (!msg) {
          fprintf(stderr, "message parse failed, i=%d\n", i);
          exit (1);
      }
+     // printf ("n=%d, suvccess\n", i);
      iam_freeIamMessage(msg);
      n++;
      if ((n/10000)*10000 == n) printf(".");
   }
+  free(emsg_sav);
   exit (0);
 }
 
